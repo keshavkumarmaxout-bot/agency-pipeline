@@ -1,0 +1,36 @@
+# Follow-up cadences. The scheduler reads this; agents never choose timing.
+# `offset_days` is measured from the first touch of the sequence.
+
+first_touch:
+  description: Cold outreach after a tier A/B score.
+  steps:
+    - { offset_days: 0,  angle: initial }
+    - { offset_days: 2,  angle: short_bump }
+    - { offset_days: 5,  angle: new_value_or_proof_point }
+    - { offset_days: 10, angle: different_angle }
+    - { offset_days: 18, angle: final_and_close_the_loop }
+  on_exhausted: nurture
+
+post_meeting:
+  description: Meeting held, proposal not yet sent.
+  steps:
+    - { offset_days: 1, angle: recap_and_confirm_scope }
+    - { offset_days: 3, angle: proposal_incoming }
+  on_exhausted: nurture
+
+proposal_sent:
+  description: Proposal delivered, awaiting a decision. Slower and more patient.
+  steps:
+    - { offset_days: 2,  angle: check_received_and_offer_walkthrough }
+    - { offset_days: 5,  angle: answer_likely_objection }
+    - { offset_days: 10, angle: ask_directly_for_a_decision }
+    - { offset_days: 21, angle: close_the_loop_politely }
+  on_exhausted: nurture
+
+nurture:
+  description: Long-cycle. Low frequency, genuinely useful content only.
+  steps:
+    - { offset_days: 30,  angle: useful_resource }
+    - { offset_days: 90,  angle: useful_resource }
+    - { offset_days: 180, angle: check_in }
+  on_exhausted: stop

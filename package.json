@@ -1,0 +1,31 @@
+{
+  "name": "agency-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "node --watch src/jobs/worker.ts",
+    "worker": "node src/jobs/worker.ts",
+    "db:migrate": "node src/db/migrate.ts",
+    "smoke:cache": "node tests/smoke-cache.ts",
+    "test": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.1",
+    "pg-boss": "^10.1.5",
+    "yaml": "^2.7.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.2"
+  }
+}
