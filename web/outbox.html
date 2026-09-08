@@ -1,0 +1,831 @@
+<title>Pipeline Outbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root {
+  --ground: #f5f7f6;
+  --surface: #ffffff;
+  --surface-2: #eef2f1;
+  --ink: #14201e;
+  --ink-2: #3d4d4a;
+  --muted: #66766f;
+  --line: #dde4e2;
+  --line-strong: #c4cfcc;
+  --accent: #14615b;
+  --accent-soft: #d9eae7;
+  --ok: #2c6b47;
+  --ok-soft: #dcebe1;
+  --danger: #9a382f;
+  --danger-soft: #f4dedb;
+  --warn: #8d5f10;
+  --warn-soft: #f7e9cd;
+  --shadow: 0 1px 2px rgba(20, 32, 30, .06), 0 8px 24px -12px rgba(20, 32, 30, .18);
+
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0d1312;
+    --surface: #141d1b;
+    --surface-2: #1b2624;
+    --ink: #e7edeb;
+    --ink-2: #c0ccc9;
+    --muted: #8fa09c;
+    --line: #253331;
+    --line-strong: #33443f;
+    --accent: #4fb3a8;
+    --accent-soft: #12302d;
+    --ok: #63b98a;
+    --ok-soft: #14301f;
+    --danger: #e08276;
+    --danger-soft: #351a16;
+    --warn: #d7a44e;
+    --warn-soft: #33260d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0d1312;
+  --surface: #141d1b;
+  --surface-2: #1b2624;
+  --ink: #e7edeb;
+  --ink-2: #c0ccc9;
+  --muted: #8fa09c;
+  --line: #253331;
+  --line-strong: #33443f;
+  --accent: #4fb3a8;
+  --accent-soft: #12302d;
+  --ok: #63b98a;
+  --ok-soft: #14301f;
+  --danger: #e08276;
+  --danger-soft: #351a16;
+  --warn: #d7a44e;
+  --warn-soft: #33260d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 20px 56px; }
+
+/* ---------------------------------------------------------- header */
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.masthead h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.masthead .sub { color: var(--muted); font-size: 13px; }
+.masthead .spacer { flex: 1 1 auto; }
+
+.rule {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+  border-radius: 0 4px 4px 0;
+}
+
+.banner {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  padding: 9px 12px;
+  border-radius: 6px;
+}
+.banner strong { color: var(--ink); font-weight: 600; }
+.banner[hidden] { display: none; }
+
+/* ---------------------------------------------------------- counters */
+
+.counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  margin: 18px 0 20px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.counter { background: var(--surface); padding: 12px 14px; }
+.counter .n {
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.counter .k {
+  margin-top: 3px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+}
+.counter.alert .n { color: var(--warn); }
+.counter.good .n { color: var(--ok); }
+</style>
+<style>
+/* ---------------------------------------------------------- shell */
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 880px) {
+  .shell { grid-template-columns: 1fr; }
+}
+
+.pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.pane-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.pane-head .count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------- queue */
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+  max-height: 74vh;
+  overflow-y: auto;
+}
+.queue li + li { border-top: 1px solid var(--line); }
+
+.row {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  padding: 11px 13px 11px 12px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.row:hover { background: var(--surface-2); }
+.row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.row[aria-current="true"] {
+  background: var(--surface-2);
+  border-left-color: var(--accent);
+}
+.row.breached { border-left-color: var(--warn); }
+.row.breached[aria-current="true"] { border-left-color: var(--warn); }
+
+.row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.row-co { font-weight: 600; letter-spacing: -.005em; }
+.row-top .when {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.row-subj {
+  color: var(--ink-2);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-meta {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+/* ---------------------------------------------------------- chips */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.chip.tier-A { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, transparent); }
+.chip.tier-B { background: var(--surface-2); color: var(--ink-2); }
+.chip.tier-C { background: transparent; color: var(--muted); }
+.chip.sla { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 34%, transparent); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 32%, transparent); }
+.chip.no { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, transparent); }
+.chip.mono { font-family: var(--mono); text-transform: none; letter-spacing: 0; }
+
+/* ---------------------------------------------------------- detail */
+
+.detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.detail-head {
+  padding: 15px 18px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.detail-head h3 {
+  margin: 0 0 3px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  text-wrap: balance;
+}
+.detail-head .who { color: var(--muted); font-size: 13px; }
+.detail-head .facts {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.field { padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.field > .label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subject-line {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.draft {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--ink);
+  white-space: pre-wrap;
+  max-width: 62ch;
+}
+.draft .sig { color: var(--ink-2); }
+
+textarea.draft-edit {
+  width: 100%;
+  min-height: 190px;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--ink);
+  background: var(--ground);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 11px 13px;
+  resize: vertical;
+}
+textarea.draft-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+</style>
+<style>
+/* ------------------------------------------------- basis (the check) */
+
+.basis {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 11px 13px;
+}
+.basis ol { margin: 0; padding-left: 17px; display: grid; gap: 6px; }
+.basis li { font-size: 13px; color: var(--ink-2); }
+.basis li .src {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  display: block;
+  margin-top: 1px;
+}
+.basis.empty {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent);
+  color: var(--danger);
+  font-size: 13px;
+}
+.basis.empty strong { display: block; font-weight: 600; margin-bottom: 2px; }
+
+/* ---------------------------------------------------------- actions */
+
+.actions {
+  padding: 14px 18px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  background: var(--surface-2);
+}
+.btn {
+  font: inherit;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--muted); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+  font-weight: 600;
+}
+:root[data-theme="dark"] .btn.primary,
+.btn.primary { color: #fff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn.primary { color: #08100f; }
+}
+:root[data-theme="dark"] .btn.primary { color: #08100f; }
+.btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 42%, transparent); }
+.btn.danger:hover { background: var(--danger-soft); }
+.actions .spacer { flex: 1 1 auto; }
+.actions .cost {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.reject-box { padding: 0 18px 16px; display: grid; gap: 8px; }
+.reject-box input {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 11px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  width: 100%;
+}
+.reject-box input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.reject-box .hint { font-size: 12px; color: var(--muted); }
+.reject-box .btns { display: flex; gap: 8px; }
+
+/* ---------------------------------------------------------- states */
+
+.decided {
+  padding: 13px 18px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.decided.approved { background: var(--ok-soft); color: var(--ok); }
+.decided.rejected { background: var(--danger-soft); color: var(--danger); }
+.decided .why { color: var(--ink-2); font-style: italic; }
+
+.empty-state {
+  padding: 46px 22px;
+  text-align: center;
+  color: var(--muted);
+}
+.empty-state p { margin: 0 0 4px; }
+.empty-state .big { color: var(--ink); font-size: 15px; font-weight: 500; }
+
+.note {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  max-width: 74ch;
+}
+.note code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--surface-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <h1>Pipeline Outbox</h1>
+    <span class="sub">Nothing reaches a client until someone here approves it.</span>
+    <span class="spacer"></span>
+    <span class="sub" id="conn">Connecting…</span>
+  </header>
+
+  <p class="rule">
+    Check the <strong>personalization basis</strong> before approving. Every specific claim about
+    the prospect must trace to enrichment data. A draft with no basis is auto-rejected.
+  </p>
+
+  <div class="banner" id="seed-banner" hidden>
+    <span>
+      <strong>Example queue.</strong>
+      These are seeded demonstration drafts, not real leads. Approving or rejecting them
+      changes only this page's own store.
+    </span>
+  </div>
+
+  <section class="counters" aria-label="Queue summary">
+    <div class="counter"><div class="n" id="c-pending">—</div><div class="k">Awaiting review</div></div>
+    <div class="counter alert"><div class="n" id="c-sla">—</div><div class="k">SLA breached</div></div>
+    <div class="counter good"><div class="n" id="c-approved">—</div><div class="k">Approved</div></div>
+    <div class="counter"><div class="n" id="c-rejected">—</div><div class="k">Rejected</div></div>
+    <div class="counter"><div class="n" id="c-cost">—</div><div class="k">Agent cost</div></div>
+  </section>
+
+  <div class="shell">
+    <div>
+      <div class="pane-head">
+        <h2>Queue</h2>
+        <span class="count" id="q-count"></span>
+      </div>
+      <ul class="queue" id="queue"></ul>
+    </div>
+
+    <div>
+      <div class="pane-head">
+        <h2>Draft</h2>
+        <span class="count" id="d-id"></span>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </div>
+
+  <p class="note" id="note"></p>
+</div>
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const qEl = $("queue"), dEl = $("detail");
+
+  let db = null;
+  let rows = [];
+  let selectedId = null;
+  let rejecting = false;
+  let busy = false;
+
+  const KIND = {
+    first_touch: "First touch",
+    followup: "Follow-up",
+    reply: "Reply",
+    proposal: "Proposal",
+    contract: "Contract",
+  };
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const money = (n) => "$" + (Number(n) || 0).toFixed(3);
+
+  function ago(iso) {
+    if (!iso) return "";
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (!Number.isFinite(mins)) return "";
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m";
+    const h = Math.round(mins / 60);
+    if (h < 24) return h + "h";
+    return Math.round(h / 24) + "d";
+  }
+
+  // Most urgent first: still waiting, breached, then longest-waiting.
+  function order(a, b) {
+    const pend = (r) => (r.state === "pending" ? 0 : 1);
+    if (pend(a) !== pend(b)) return pend(a) - pend(b);
+    if (!!b.slaBreached !== !!a.slaBreached) return b.slaBreached ? 1 : -1;
+    return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+  }
+
+  /* ------------------------------------------------------- rendering */
+
+  function renderCounters() {
+    const pending = rows.filter((r) => r.state === "pending");
+    $("c-pending").textContent = pending.length;
+    $("c-sla").textContent = pending.filter((r) => r.slaBreached).length;
+    $("c-approved").textContent = rows.filter((r) => r.state === "approved").length;
+    $("c-rejected").textContent = rows.filter((r) => r.state === "rejected").length;
+    $("c-cost").textContent = money(rows.reduce((s, r) => s + (Number(r.costUsd) || 0), 0));
+  }
+
+  function renderQueue() {
+    const sorted = [...rows].sort(order);
+    $("q-count").textContent = sorted.length ? sorted.length + " drafts" : "";
+
+    if (!sorted.length) {
+      qEl.innerHTML = '<li><div class="empty-state"><p class="big">Queue is clear.</p>'
+        + "<p>Nothing is waiting on a human.</p></div></li>";
+      return;
+    }
+
+    qEl.innerHTML = sorted.map((r) => {
+      const cls = ["row", r.slaBreached && r.state === "pending" ? "breached" : ""].join(" ");
+      const step = r.sequenceTotal
+        ? `<span class="chip mono">${esc(r.sequenceStep)}/${esc(r.sequenceTotal)}</span>` : "";
+      const stateChip = r.state === "approved" ? '<span class="chip ok">Approved</span>'
+        : r.state === "rejected" ? '<span class="chip no">Rejected</span>' : "";
+      const sla = r.slaBreached && r.state === "pending"
+        ? '<span class="chip sla">SLA breached</span>' : "";
+      return `<li><button class="${cls}" data-id="${esc(r.id)}" role="option"
+          aria-current="${r.id === selectedId}">
+        <span class="row-top">
+          <span class="row-co">${esc(r.company)}</span>
+          <span class="when">${esc(ago(r.createdAt))}</span>
+        </span>
+        <span class="row-subj">${esc(r.subject)}</span>
+        <span class="row-meta">
+          <span class="chip tier-${esc(r.tier)}">Tier ${esc(r.tier)}</span>
+          <span class="chip">${esc(KIND[r.kind] || r.kind)}</span>
+          ${step}${sla}${stateChip}
+        </span>
+      </button></li>`;
+    }).join("");
+  }
+
+  function renderDetail() {
+    const r = rows.find((x) => x.id === selectedId);
+    $("d-id").textContent = r ? r.dealRef || "" : "";
+
+    if (!r) {
+      dEl.innerHTML = '<div class="empty-state"><p class="big">Select a draft.</p>'
+        + "<p>Pick anything in the queue to review it.</p></div>";
+      return;
+    }
+
+    const basis = Array.isArray(r.basis) ? r.basis : [];
+    const basisHtml = basis.length
+      ? `<div class="basis"><ol>${basis.map((b) =>
+          `<li>${esc(b.claim)}<span class="src">${esc(b.source)}</span></li>`).join("")}</ol></div>`
+      : '<div class="basis empty"><strong>No personalization basis.</strong>'
+        + "Every specific claim must trace to enrichment data. Reject this draft.</div>";
+
+    const decided = r.state === "approved"
+      ? `<div class="decided approved"><strong>Approved</strong>
+           <span>${esc(r.decidedBy || "you")}${r.editedBody ? " · edited before sending" : ""}</span></div>`
+      : r.state === "rejected"
+      ? `<div class="decided rejected"><strong>Rejected</strong>
+           <span class="why">${esc(r.rejectReason || "no reason given")}</span></div>`
+      : "";
+
+    const canApprove = basis.length > 0;
+
+    const actions = r.state !== "pending" ? "" : rejecting
+      ? `<div class="reject-box">
+           <label class="hint" for="why">Why is this wrong? Rejection reasons are what tune the playbooks.</label>
+           <input id="why" type="text" placeholder="e.g. invented a case study we have never run" />
+           <div class="btns">
+             <button class="btn danger" data-act="confirm-reject">Reject draft</button>
+             <button class="btn" data-act="cancel-reject">Cancel</button>
+           </div>
+         </div>`
+      : `<div class="actions">
+           <button class="btn primary" data-act="approve" ${canApprove ? "" : "disabled"}>Approve &amp; send</button>
+           <button class="btn" data-act="edit">Edit, then approve</button>
+           <button class="btn danger" data-act="reject">Reject</button>
+           <span class="spacer"></span>
+           <span class="cost">${esc(r.agent)} · ${esc(r.model)} · ${money(r.costUsd)}</span>
+         </div>`;
+
+    dEl.innerHTML = `
+      <div class="detail-head">
+        <h3>${esc(r.company)}</h3>
+        <div class="who">${esc(r.contact)} · ${esc(r.email)}</div>
+        <div class="facts">
+          <span class="chip tier-${esc(r.tier)}">Tier ${esc(r.tier)} · ${esc(r.score)}</span>
+          <span class="chip">${esc(r.stage)}</span>
+          <span class="chip">${esc(KIND[r.kind] || r.kind)}</span>
+          ${r.sequenceTotal ? `<span class="chip mono">step ${esc(r.sequenceStep)} of ${esc(r.sequenceTotal)}</span>` : ""}
+          ${r.slaBreached ? '<span class="chip sla">SLA breached</span>' : ""}
+        </div>
+      </div>
+      ${decided}
+      <div class="field">
+        <div class="label">Subject</div>
+        <div class="subject-line">${esc(r.subject)}</div>
+      </div>
+      <div class="field">
+        <div class="label">Body</div>
+        <div id="body-slot"><div class="draft">${esc(r.editedBody || r.body)}</div></div>
+      </div>
+      <div class="field">
+        <div class="label">Personalization basis <span class="chip mono">${basis.length} claim${basis.length === 1 ? "" : "s"}</span></div>
+        ${basisHtml}
+      </div>
+      ${actions}`;
+  }
+
+  function render() {
+    renderCounters();
+    renderQueue();
+    renderDetail();
+  }
+  /* ------------------------------------------------------- actions */
+
+  async function decide(id, patch) {
+    if (busy || !db) return;
+    busy = true;
+    try {
+      await db.doc("approvals/" + id).update({
+        ...patch,
+        decidedBy: "reviewer",
+        decidedAt: new Date().toISOString(),
+      });
+      rejecting = false;
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "revoked" || code === "not_granted") {
+        setStatus("Read-only — your access to this queue changed.");
+      } else if (code === "resource_exhausted" || code === "unavailable") {
+        setStatus("Busy — that did not save. Try again in a moment.");
+      } else {
+        setStatus("That did not save: " + (e && e.message ? e.message : "unknown error"));
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  document.addEventListener("click", (ev) => {
+    const row = ev.target.closest(".row");
+    if (row) {
+      selectedId = row.dataset.id;
+      rejecting = false;
+      render();
+      return;
+    }
+
+    const btn = ev.target.closest("[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const r = rows.find((x) => x.id === selectedId);
+    if (!r) return;
+
+    if (act === "approve") {
+      const edit = document.querySelector("textarea.draft-edit");
+      decide(r.id, edit ? { state: "approved", editedBody: edit.value } : { state: "approved" });
+    } else if (act === "edit") {
+      const slot = $("body-slot");
+      if (slot && !slot.querySelector("textarea")) {
+        const ta = document.createElement("textarea");
+        ta.className = "draft-edit";
+        ta.value = r.editedBody || r.body;
+        slot.replaceChildren(ta);
+        ta.focus();
+      }
+    } else if (act === "reject") {
+      rejecting = true;
+      render();
+      const why = $("why");
+      if (why) why.focus();
+    } else if (act === "cancel-reject") {
+      rejecting = false;
+      render();
+    } else if (act === "confirm-reject") {
+      const why = $("why");
+      const reason = why && why.value.trim();
+      if (!reason) {
+        if (why) why.focus();
+        setStatus("A rejection needs a reason — that is what tunes the playbooks.");
+        return;
+      }
+      decide(r.id, { state: "rejected", rejectReason: reason });
+    }
+  });
+
+  /* ------------------------------------------------------- lifecycle */
+
+  function setStatus(text) { $("conn").textContent = text; }
+
+  function offline(message) {
+    setStatus(message);
+    rows = [];
+    renderCounters();
+    qEl.innerHTML = '<li><div class="empty-state"><p class="big">No queue connected.</p>'
+      + "<p>This page reads its queue from the artifact store.</p></div></li>";
+    dEl.innerHTML = '<div class="empty-state"><p class="big">Nothing to review here.</p>'
+      + "<p>Open this page from claude.ai, signed in, to load the queue.</p></div>";
+    $("note").innerHTML = "This is the approval gate from the agency pipeline. In production the "
+      + "queue is filled by the drafting agents and approved drafts are picked up by the sender "
+      + "worker; here it runs on the artifact's own store.";
+  }
+
+  // Render the shell immediately — the capability resolves later, if at all.
+  render();
+  setStatus("Connecting…");
+
+  const useCap = window.claude && typeof window.claude.use === "function"
+    ? window.claude.use("db")
+    : Promise.resolve(null);
+
+  useCap.then(async (handle) => {
+    if (!handle) return offline("Offline — queue unavailable in this view.");
+    db = handle;
+
+    $("note").innerHTML = "Approvals are shared: everyone with access sees decisions live. "
+      + "In production the drafting agents write here through "
+      + "<code>queue_for_approval</code> and the sender worker only ever reads rows in "
+      + "<code>approved</code> — which is what keeps an agent from mailing a client directly.";
+
+    db.collection("approvals").onSnapshot(
+      (snap) => {
+        rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        $("seed-banner").hidden = !rows.some((r) => r.isExample);
+        if (!rows.some((r) => r.id === selectedId)) {
+          const next = [...rows].sort(order)[0];
+          selectedId = next ? next.id : null;
+        }
+        setStatus(rows.length ? "Live" : "Live — queue empty");
+        render();
+      },
+      (err) => {
+        const code = err && err.code;
+        offline(code === "revoked"
+          ? "Read-only — your access to this queue changed."
+          : "Offline — queue unavailable in this view.");
+      },
+    );
+  });
+})();
+</script>
